@@ -1,9 +1,22 @@
-void setup() {
-  // put your setup code here, to run once:
 
+
+const byte rfInputPin = 2;
+volatile byte state = LOW;
+
+static void activityLed (byte on) {
+  digitalWrite(LED_BUILTIN, !on);
+}
+
+void setup() {
+  pinMode(rfInputPin, INPUT_PULLUP);
+  pinMode(LED_BUILTIN, OUTPUT);
+  attachInterrupt(digitalPinToInterrupt(rfInputPin), flank, CHANGE);
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
+  activityLed(state);
+}
 
+void flank() {
+  state = !state;
 }
