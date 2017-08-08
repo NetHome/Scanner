@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2005-2017, Stefan Strömberg <stefangs@nethome.nu>
  *
- * This file is part of OpenNetHome  (http://www.nethome.nu)
+ * This file is part of OpenNetHome  (http://opennethome.org)
  *
  * OpenNetHome is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -64,6 +64,19 @@ static void printhex(word data) {
 }
 
 void setup() {
+  cli();
+  TCCR1A = 0;// clear TCCR1A register
+  TCCR1B = 0;// same for TCCR1B
+  TCNT1  = 0;//initialize counter value to 0
+  // set compare match register for 1hz increments
+  OCR1A = 0xFFFF;// = (16*10^6) / (1*1024) - 1 (must be <65536)
+  // turn on CTC mode
+  TCCR1B |= (1 << WGM12);
+  // Set CS12 and CS10 bits for 1024 prescaler
+  TCCR1B |= (1 << CS12) | (1 << CS10);  
+  // enable timer compare interrupt
+  TIMSK1 |= (1 << OCIE1A);
+  sei();
   Serial.begin(115200);
   pinMode(rfInputPin, INPUT_PULLUP);
   pinMode(LED_BUILTIN, OUTPUT);
@@ -77,12 +90,20 @@ void loop() {
   }
 }
 
+ISR(TIMER1_COMPA_vect){//timer1 interrupt 1Hz toggles pin 13 (LED)
+  state = !state;
+}
+
+/**
+ * Interrupt service routine for changes on the RF input pin
+ */
 void flank() {
   state = !state;
   now = digitalRead(rfInputPin);
   if (now != lastRfInput) {
     lastRfInput = now;
-    scannedPulses[nextWrite] = counter++;
+    scannedPulses[nextWrite] = TCNT1;
+    TCNT1 = 0;
     if (now) {
       scannedPulses[nextWrite] |= 0xF000;
     }
