@@ -18,6 +18,8 @@
  */
  
 #define REC_BUFFER_LEN 16
+#define SPACE_INPUT LOW
+#define MARK_INPUT HIGH
 
 const byte rfInputPin = 2;
 volatile byte state = LOW;
@@ -26,7 +28,11 @@ volatile byte nextRead = 0;
 volatile byte nextWrite = 0;
 volatile word counter = 0;
 volatile byte lastRfInput = HIGH;
-volatile byte now; 
+volatile byte now;
+volatile unsigned long space;
+volatile word mark;
+volatile byte scanState = 0;
+volatile byte scanOverflow = 0;
 
 static byte canRead() {
   return nextRead != nextWrite;  
@@ -60,20 +66,20 @@ static void printhex(word data) {
   Serial.print(hexString[(data >> 12) & 0xF]);
   Serial.print(hexString[(data >> 8) & 0xF]);
   Serial.print(hexString[(data >> 4) & 0xF]);
-  Serial.println(hexString[(data) & 0xF]);
+  Serial.print(hexString[(data) & 0xF]);
 }
 
 void setup() {
   cli();
   TCCR1A = 0;// clear TCCR1A register
-  TCCR1B = 0;// same for TCCR1B
-  TCNT1  = 0;//initialize counter value to 0
-  // set compare match register for 1hz increments
-  OCR1A = 0xFFFF;// = (16*10^6) / (1*1024) - 1 (must be <65536)
+  TCCR1B = 0;// clear TCCR1B
+  TCNT1  = 0;// initialize counter value to 0
+  // set compare match register
+  OCR1A = 0xFFFF;
   // turn on CTC mode
   TCCR1B |= (1 << WGM12);
-  // Set CS12 and CS10 bits for 1024 prescaler
-  TCCR1B |= (1 << CS12) | (1 << CS10);  
+  // Set CS11 bits for 8 prescaler
+  TCCR1B |= (1 << CS11);  
   // enable timer compare interrupt
   TIMSK1 |= (1 << OCIE1A);
   sei();
@@ -86,12 +92,21 @@ void setup() {
 void loop() {
   activityLed(state);
   if (canRead()) {
+    Serial.print("P");
     printhex(read());
+    printhex(read());
+    Serial.print("\n");
   }
 }
 
-ISR(TIMER1_COMPA_vect){//timer1 interrupt 1Hz toggles pin 13 (LED)
+ISR(TIMER1_COMPA_vect){
   state = !state;
+  if (scanState == 0) {
+    space += 0x7FFF;
+    if (space > 0xFFFF) {
+      space = 0xFFFF;
+    }  
+  }
 }
 
 /**
@@ -100,8 +115,36 @@ ISR(TIMER1_COMPA_vect){//timer1 interrupt 1Hz toggles pin 13 (LED)
 void flank() {
   state = !state;
   now = digitalRead(rfInputPin);
-  if (now != lastRfInput) {
+  if ((now != lastRfInput) && (scanOverflow == 0)) {
     lastRfInput = now;
+    if ((scanState == 0) && (now == MARK_INPUT)) {
+      // Handle start of mark
+      space += (TCNT1 >> 1);
+      TCNT1 = 0;
+      if (space > 0xFFFF) {
+        space = 0xFFFF;
+      }
+      scanState = 1;
+    } else if ((scanState == 1) && (now == SPACE_INPUT)) {
+      // Handle end of mark
+      scannedPulses[nextWrite + 1] = (TCNT1 >> 1);
+      TCNT1 = 0;
+      scannedPulses[nextWrite] = space;
+      nextWrite = (nextWrite + 2) % REC_BUFFER_LEN;
+      if (nextWrite == nextRead) {
+        scanOverflow = 1;
+      }
+      space = 0;
+      scanState = 0;
+    } else {
+      // Handle error?  
+      scannedPulses[nextWrite] = 0xFFFF;
+      scannedPulses[nextWrite + 1] = 0xFFFF;
+      nextWrite = (nextWrite + 2) % REC_BUFFER_LEN;
+      if (nextWrite == nextRead) {
+        scanOverflow = 1;
+      }
+    }
     scannedPulses[nextWrite] = TCNT1;
     TCNT1 = 0;
     if (now) {
