@@ -100,56 +100,48 @@ void loop() {
 }
 
 ISR(TIMER1_COMPA_vect){
-  state = !state;
-  if (scanState == 0) {
-    space += 0x7FFF;
-    if (space > 0xFFFF) {
-      space = 0xFFFF;
-    }  
-  }
+  scanState = 0; // Assume space state on overflow
+  space += 0x7FFF;
+  if (space > 0xFFFF) {
+    space = 0xFFFF;
+  }  
 }
 
 /**
  * Interrupt service routine for changes on the RF input pin
  */
 void flank() {
-  state = !state;
+  // Save counter and reset
+  counter = (TCNT1 >> 1);
+  TCNT1 = 0;
+  
+  if (scanOverflow) return;
   now = digitalRead(rfInputPin);
-  if ((now != lastRfInput) && (scanOverflow == 0)) {
-    lastRfInput = now;
-    if ((scanState == 0) && (now == MARK_INPUT)) {
-      // Handle start of mark
-      space += (TCNT1 >> 1);
-      TCNT1 = 0;
-      if (space > 0xFFFF) {
-        space = 0xFFFF;
-      }
-      scanState = 1;
-    } else if ((scanState == 1) && (now == SPACE_INPUT)) {
-      // Handle end of mark
-      scannedPulses[nextWrite + 1] = (TCNT1 >> 1);
-      TCNT1 = 0;
-      scannedPulses[nextWrite] = space;
-      nextWrite = (nextWrite + 2) % REC_BUFFER_LEN;
-      if (nextWrite == nextRead) {
-        scanOverflow = 1;
-      }
-      space = 0;
-      scanState = 0;
-    } else {
-      // Handle error?  
-      scannedPulses[nextWrite] = 0xFFFF;
-      scannedPulses[nextWrite + 1] = 0xFFFF;
-      nextWrite = (nextWrite + 2) % REC_BUFFER_LEN;
-      if (nextWrite == nextRead) {
-        scanOverflow = 1;
-      }
+  if ((scanState == 0) && (now == MARK_INPUT)) {
+    // Handle start of mark
+    space += counter;
+    if (space > 0xFFFF) {
+      space = 0xFFFF;
+    }  
+    scanState = 1;
+  } else if ((scanState == 1) && (now == SPACE_INPUT)) {
+    // Handle end of mark
+    scannedPulses[nextWrite + 1] = counter;
+    scannedPulses[nextWrite] = space;
+    nextWrite = (nextWrite + 2) % REC_BUFFER_LEN;
+    if (nextWrite == nextRead) {
+      scanOverflow = 1;
     }
-    scannedPulses[nextWrite] = TCNT1;
-    TCNT1 = 0;
-    if (now) {
-      scannedPulses[nextWrite] |= 0xF000;
+    space = 0;
+    scanState = 0;
+  } else {
+    // Handle error?  
+    scannedPulses[nextWrite] = 0;
+    scannedPulses[nextWrite + 1] = 0;
+    nextWrite = (nextWrite + 2) % REC_BUFFER_LEN;
+    if (nextWrite == nextRead) {
+      scanOverflow = 1;
     }
-    nextWrite = (nextWrite + 1) % REC_BUFFER_LEN;
+    scanState = 0;
   }
 }
