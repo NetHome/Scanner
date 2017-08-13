@@ -17,7 +17,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
  
-#define REC_BUFFER_LEN 16
+#define REC_BUFFER_LEN 64
 #define SPACE_INPUT LOW
 #define MARK_INPUT HIGH
 
@@ -26,6 +26,7 @@ volatile byte state = LOW;
 word scannedPulses[REC_BUFFER_LEN];
 volatile byte nextRead = 0;
 volatile byte nextWrite = 0;
+volatile byte nextWriteCandidate = 0;
 volatile word counter = 0;
 volatile byte lastRfInput = HIGH;
 volatile byte now;
@@ -57,7 +58,7 @@ static word read() {
 }
 
 static void activityLed (byte on) {
-  digitalWrite(LED_BUILTIN, !on);
+  digitalWrite(LED_BUILTIN, on);
 }
 
 static const char hexString[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
@@ -101,6 +102,7 @@ void loop() {
 
 ISR(TIMER1_COMPA_vect){
   scanState = 0; // Assume space state on overflow
+  state = 0;
   space += 0x7FFF;
   if (space > 0xFFFF) {
     space = 0xFFFF;
@@ -115,7 +117,6 @@ void flank() {
   counter = (TCNT1 >> 1);
   TCNT1 = 0;
   
-  if (scanOverflow) return;
   now = digitalRead(rfInputPin);
   if ((scanState == 0) && (now == MARK_INPUT)) {
     // Handle start of mark
@@ -125,12 +126,22 @@ void flank() {
     }  
     scanState = 1;
   } else if ((scanState == 1) && (now == SPACE_INPUT)) {
-    // Handle end of mark
+    state = 1;
+    if (scanOverflow && (nextWrite == nextRead)) {
+      // If we were in overflow state, but buffer is now drained, clear the state and signal it
+      // by writing special values
+      scanOverflow = 0;
+      space = 0xFFFF;
+      counter = 0xFFFF;
+    }
+    // Handle end of mark, by writing the pulse
     scannedPulses[nextWrite + 1] = counter;
     scannedPulses[nextWrite] = space;
-    nextWrite = (nextWrite + 2) % REC_BUFFER_LEN;
-    if (nextWrite == nextRead) {
+    nextWriteCandidate = (nextWrite + 2) % REC_BUFFER_LEN;
+    if (nextWriteCandidate == nextRead) {
       scanOverflow = 1;
+    } else if (!scanOverflow){
+      nextWrite = nextWriteCandidate;
     }
     space = 0;
     scanState = 0;
