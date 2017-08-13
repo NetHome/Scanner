@@ -17,11 +17,12 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
  
-#define REC_BUFFER_LEN 16
+#define REC_BUFFER_LEN 64
 #define SPACE_INPUT LOW
 #define MARK_INPUT HIGH
 
 const byte rfInputPin = 2;
+const byte debugPin = 3;
 volatile byte state = LOW;
 word scannedPulses[REC_BUFFER_LEN];
 volatile byte nextRead = 0;
@@ -33,6 +34,8 @@ volatile unsigned long space;
 volatile word mark;
 volatile byte scanState = 0;
 volatile byte scanOverflow = 0;
+volatile byte debugState = 0;
+volatile word input = 0;
 
 static byte canRead() {
   return nextRead != nextWrite;  
@@ -86,6 +89,7 @@ void setup() {
   Serial.begin(115200);
   pinMode(rfInputPin, INPUT_PULLUP);
   pinMode(LED_BUILTIN, OUTPUT);
+  pinMode(debugPin, OUTPUT);
   attachInterrupt(digitalPinToInterrupt(rfInputPin), flank, CHANGE);
 }
 
@@ -109,10 +113,33 @@ ISR(TIMER1_COMPA_vect){
   }
 }
 
+
 /**
  * Interrupt service routine for changes on the RF input pin
  */
 void flank() {
+  scannedPulses[nextWrite] = (TCNT1 >> 1);
+  TCNT1 = 0;
+  if (scanOverflow) return;
+  state = !state;
+  debugState = !debugState;
+  digitalWrite(debugPin, debugState);
+  input = 0;
+  for (int i = 0; i < 16; i++) {
+    input <<= 1;
+    input |= digitalRead(rfInputPin) ? 1 : 0;
+  }
+  scannedPulses[nextWrite + 1] = input;
+  nextWrite = (nextWrite + 2) % REC_BUFFER_LEN;
+  if (nextWrite == nextRead) {
+    scanOverflow = 1;
+  }
+}
+
+/**
+ * Interrupt service routine for changes on the RF input pin
+ */
+void oldFlank() {
   state = !state;
   now = digitalRead(rfInputPin);
   if ((now != lastRfInput) && (scanOverflow == 0)) {
