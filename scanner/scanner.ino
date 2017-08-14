@@ -17,11 +17,15 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
  
+#include "receiver.h"
+ 
 #define REC_BUFFER_LEN 64
 #define SPACE_INPUT LOW
 #define MARK_INPUT HIGH
 
 const byte rfInputPin = 2;
+
+
 volatile byte state = LOW;
 word scannedPulses[REC_BUFFER_LEN];
 volatile byte nextRead = 0;
@@ -34,6 +38,8 @@ volatile unsigned long space;
 volatile word mark;
 volatile byte scanState = 0;
 volatile byte scanOverflow = 0;
+
+Receiver receiver;
 
 static byte canRead() {
   return nextRead != nextWrite;  
@@ -71,23 +77,9 @@ static void printhex(word data) {
 }
 
 void setup() {
-  cli();
-  TCCR1A = 0;// clear TCCR1A register
-  TCCR1B = 0;// clear TCCR1B
-  TCNT1  = 0;// initialize counter value to 0
-  // set compare match register
-  OCR1A = 0xFFFF;
-  // turn on CTC mode
-  TCCR1B |= (1 << WGM12);
-  // Set CS11 bits for 8 prescaler
-  TCCR1B |= (1 << CS11);  
-  // enable timer compare interrupt
-  TIMSK1 |= (1 << OCIE1A);
-  sei();
+  receiver.start();
   Serial.begin(115200);
-  pinMode(rfInputPin, INPUT_PULLUP);
   pinMode(LED_BUILTIN, OUTPUT);
-  attachInterrupt(digitalPinToInterrupt(rfInputPin), flank, CHANGE);
 }
 
 void loop() {
