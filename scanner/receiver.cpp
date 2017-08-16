@@ -20,7 +20,22 @@ volatile word Receiver::mark;
 volatile byte Receiver::scanState = 0;
 volatile byte Receiver::scanOverflow = 0;
 
-void Receiver::start() {
+Receiver PulseReceiver;
+
+word Receiver::read(void) {
+  if (!canRead()) {
+    return 0;
+  }
+  word result = scannedPulses[nextRead];
+  nextRead = (nextRead + 1) % REC_BUFFER_LEN;
+  return result == 0 ? 1 : result;
+}
+
+byte Receiver::canRead() {
+  return nextRead != nextWrite;
+}
+
+void Receiver::begin() {
   cli();
   TCCR1A = 0;// clear TCCR1A register
   TCCR1B = 0;// clear TCCR1B
@@ -31,10 +46,21 @@ void Receiver::start() {
   TIMSK1 |= (1 << OCIE1A); // enable timer compare interrupt
   sei();
   pinMode(rfInputPin, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(rfInputPin), Receiver::flank, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(rfInputPin), Receiver::flankDetected, CHANGE);
 }
 
-void Receiver::flank() {
+ISR(TIMER1_COMPA_vect){
+  Receiver::scanState = 0; // Assume space state on overflow
+  Receiver::space += 0x7FFF;
+  if (Receiver::space > 0xFFFF) {
+    Receiver::space = 0xFFFF;
+  }  
+}
+
+/**
+ * Interrupt service routine for changes on the RF input pin
+ */
+void Receiver::flankDetected() {
   // Save counter and reset
   counter = (TCNT1 >> 1);
   TCNT1 = 0;

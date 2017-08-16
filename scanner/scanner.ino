@@ -19,48 +19,22 @@
  
 #include "receiver.h"
  
-#define REC_BUFFER_LEN 64
-#define SPACE_INPUT LOW
-#define MARK_INPUT HIGH
-
-const byte rfInputPin = 2;
-
-
 volatile byte state = LOW;
-word scannedPulses[REC_BUFFER_LEN];
-volatile byte nextRead = 0;
-volatile byte nextWrite = 0;
-volatile byte nextWriteCandidate = 0;
-volatile word counter = 0;
-volatile byte lastRfInput = HIGH;
-volatile byte now;
-volatile unsigned long space;
-volatile word mark;
-volatile byte scanState = 0;
-volatile byte scanOverflow = 0;
+word spaceTime;
 
-Receiver receiver;
-
-static byte canRead() {
-  return nextRead != nextWrite;  
+void setup() {
+  PulseReceiver.begin();
+  Serial.begin(115200);
+  pinMode(LED_BUILTIN, OUTPUT);
 }
 
-static byte nextPointer(byte current) {
-  return (current + 1) % REC_BUFFER_LEN;
-}
-
-static void write(word value) {
-  byte nextNextWrite = nextPointer(nextWrite);
-  if (nextNextWrite != nextRead) {
-    scannedPulses[nextWrite] = value;
-    nextWrite = nextNextWrite;
+void loop() {
+  if ((spaceTime = PulseReceiver.read()) != 0) {
+    Serial.print("P");
+    printhex(spaceTime);
+    printhex(PulseReceiver.read());
+    Serial.print("\n");
   }
-}
-
-static word read() {
-  word result = scannedPulses[nextRead];
-  nextRead = nextPointer(nextRead);
-  return result;
 }
 
 static void activityLed (byte on) {
@@ -76,75 +50,3 @@ static void printhex(word data) {
   Serial.print(hexString[(data) & 0xF]);
 }
 
-void setup() {
-  receiver.start();
-  Serial.begin(115200);
-  pinMode(LED_BUILTIN, OUTPUT);
-}
-
-void loop() {
-  activityLed(state);
-  if (canRead()) {
-    Serial.print("P");
-    printhex(read());
-    printhex(read());
-    Serial.print("\n");
-  }
-}
-
-ISR(TIMER1_COMPA_vect){
-  scanState = 0; // Assume space state on overflow
-  state = 0;
-  space += 0x7FFF;
-  if (space > 0xFFFF) {
-    space = 0xFFFF;
-  }  
-}
-
-/**
- * Interrupt service routine for changes on the RF input pin
- */
-void flank() {
-  // Save counter and reset
-  counter = (TCNT1 >> 1);
-  TCNT1 = 0;
-  
-  now = digitalRead(rfInputPin);
-  if ((scanState == 0) && (now == MARK_INPUT)) {
-    // Handle start of mark
-    space += counter;
-    if (space > 0xFFFF) {
-      space = 0xFFFF;
-    }  
-    scanState = 1;
-  } else if ((scanState == 1) && (now == SPACE_INPUT)) {
-    state = 1;
-    if (scanOverflow && (nextWrite == nextRead)) {
-      // If we were in overflow state, but buffer is now drained, clear the state and signal it
-      // by writing special values
-      scanOverflow = 0;
-      space = 0xFFFF;
-      counter = 0xFFFF;
-    }
-    // Handle end of mark, by writing the pulse
-    scannedPulses[nextWrite + 1] = counter;
-    scannedPulses[nextWrite] = space;
-    nextWriteCandidate = (nextWrite + 2) % REC_BUFFER_LEN;
-    if (nextWriteCandidate == nextRead) {
-      scanOverflow = 1;
-    } else if (!scanOverflow){
-      nextWrite = nextWriteCandidate;
-    }
-    space = 0;
-    scanState = 0;
-  } else {
-    // Handle error?  
-    scannedPulses[nextWrite] = 0;
-    scannedPulses[nextWrite + 1] = 0;
-    nextWrite = (nextWrite + 2) % REC_BUFFER_LEN;
-    if (nextWrite == nextRead) {
-      scanOverflow = 1;
-    }
-    scanState = 0;
-  }
-}
