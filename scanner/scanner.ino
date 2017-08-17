@@ -20,7 +20,6 @@
 #include "receiver.h"
  
 volatile byte state = LOW;
-word spaceTime;
 
 void setup() {
   PulseReceiver.begin();
@@ -29,9 +28,10 @@ void setup() {
 }
 
 void loop() {
-  if ((spaceTime = PulseReceiver.read()) != 0) {
+  static word space;
+  if ((space = PulseReceiver.read()) != 0) {
     Serial.print("P");
-    printhex(spaceTime);
+    printhex(space);
     printhex(PulseReceiver.read());
     Serial.print("\n");
   }
