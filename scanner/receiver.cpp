@@ -23,19 +23,17 @@
 #define SPACE_INPUT LOW
 #define MARK_INPUT HIGH
 
-const byte rfInputPin = 2;
-
 word Receiver::scannedPulses[REC_BUFFER_LEN];
 volatile byte Receiver::nextRead = 0;
 volatile byte Receiver::nextWrite = 0;
 volatile byte Receiver::nextWriteCandidate = 0;
 volatile word Receiver::counter = 0;
-volatile byte Receiver::lastRfInput = HIGH;
 volatile byte Receiver::now;
 volatile unsigned long Receiver::space;
 volatile word Receiver::mark;
 volatile byte Receiver::scanState = 0;
 volatile byte Receiver::scanOverflow = 0;
+volatile byte Receiver::rfInputPin = 2;
 
 Receiver PulseReceiver;
 
@@ -52,8 +50,9 @@ byte Receiver::canRead() {
   return nextRead != nextWrite;
 }
 
-void Receiver::begin() {
+void Receiver::begin(byte pin) {
   cli();
+  rfInputPin = pin;
   TCCR1A = 0;// clear TCCR1A register
   TCCR1B = 0;// clear TCCR1B
   TCNT1  = 0;// initialize counter value to 0
@@ -64,14 +63,26 @@ void Receiver::begin() {
   sei();
   pinMode(rfInputPin, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(rfInputPin), Receiver::flankDetected, CHANGE);
+  space = 0;
+  nextRead = 0;
+  nextWrite = 0;
+  scanState = 0;
+}
+
+void Receiver::end() {
+  detachInterrupt(digitalPinToInterrupt(rfInputPin));
+}
+
+inline void Receiver::timerCompareInterrupt() {
+  scanState = 0; // Assume space state on overflow
+  space += 0x7FFF;
+  if (space > 0xFFFF) {
+    space = 0xFFFF;
+  }    
 }
 
 ISR(TIMER1_COMPA_vect){
-  Receiver::scanState = 0; // Assume space state on overflow
-  Receiver::space += 0x7FFF;
-  if (Receiver::space > 0xFFFF) {
-    Receiver::space = 0xFFFF;
-  }  
+  Receiver::timerCompareInterrupt();
 }
 
 /**

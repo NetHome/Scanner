@@ -20,20 +20,45 @@
 #include "receiver.h"
  
 volatile byte state = LOW;
+int goodCounter = 0;
 
 void setup() {
-  PulseReceiver.begin();
+  PulseReceiver.begin(2);
   Serial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);
 }
 
 void loop() {
+  readPulses();
+}
+
+void readPulses() {
   static word space;
+  static word mark;
   if ((space = PulseReceiver.read()) != 0) {
+    mark = PulseReceiver.read();
     Serial.print("P");
     printhex(space);
-    printhex(PulseReceiver.read());
+    printhex(mark);
     Serial.print("\n");
+    vet(space);
+    vet(mark);
+  }
+}
+
+void vet(word pulse) {
+  if ((pulse > 200) && (pulse < 3000)) {
+    goodCounter += 1;
+    if (goodCounter >= 3) {
+      goodCounter = 3;
+      activityLed(HIGH);
+    }
+  } else {
+    goodCounter = 0;
+    if (goodCounter <= 0) {
+      goodCounter = 0;
+      activityLed(LOW);
+    }
   }
 }
 

@@ -19,31 +19,48 @@
  
 #include "Arduino.h"
 
+// Number of pulse lengths to buffer. Has to be an even number since each pulse
+// consists of a space followed by a mark.
 #define REC_BUFFER_LEN 128
 
+// The receiver class for pulses. This class can only be in one singleton instance
+// "PulseReceiver" since all variables are static for speed in the interrupt routines.
+// The class uses TIMER1 and one input pin supporting interrupts (choosen by the user).
 class Receiver {
-
   public:
-    void begin(void);
+  
+    // Start scanning for pulses on the input pin
+    void begin(byte pin);
+    
+    // Read the next pulse length in micro seconds. The pulses are allways delivered in pairs, 
+    // first a space pulse and then a mark pulse. 
+    // It is therefore important to call this twise to get both pulses so you don't get out of sync.
+    // If there is no data the space pulse is 0, and then there is no need to call a second time
+    // for the mark pulse.
     word read(void);
+    
+    // Stop scanning for pulses, but leaves the input buffer intact so any received data can be read
+    void end(void);
     
   private:
     static void flankDetected(void);
-    byte canRead();
+    inline byte canRead();
     
     static word scannedPulses[REC_BUFFER_LEN];
     static volatile byte nextRead;
     static volatile byte nextWrite;
     static volatile byte nextWriteCandidate;
     static volatile word counter;
-    static volatile byte lastRfInput;
     static volatile byte now;
     static volatile word mark;
     static volatile byte scanOverflow;
-    
-  public:
+    static volatile byte rfInputPin;
     static volatile byte scanState;
     static volatile unsigned long space;
+    
+  public:
+    inline static void timerCompareInterrupt();
 };
 
 extern Receiver PulseReceiver;
+
