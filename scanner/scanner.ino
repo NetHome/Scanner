@@ -18,6 +18,7 @@
  */
  
 #include "InterruptPulseReceiver.h"
+#include "ModulatedPulseTransmitter.h"
  
 #define INPUT_BUFFER_SIZE 20
 #define FIRMWARE_VERSION "VOpenNetHome 1.0"
@@ -27,6 +28,7 @@ volatile byte state = LOW;
 
 void setup() {
   PulseReceiver.begin(2);
+  PulseTransmitter.reset();
   Serial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);
 }
@@ -52,19 +54,52 @@ void handlePulses() {
 
 void handleInput() {
   if (Serial.available() > 0) {
-    char result = Serial.readBytesUntil('\n', inputBuffer, INPUT_BUFFER_SIZE);
+    byte result = Serial.readBytesUntil('\n', inputBuffer, INPUT_BUFFER_SIZE);
     inputBuffer[result] = 0;
-    interpretCommand(inputBuffer);
+    interpretCommand(inputBuffer, result);
   }
 }
 
-void interpretCommand(char* inputBuffer) {
-  if (inputBuffer[0] == 'V' ) {
+void interpretCommand(char* inputBuffer, byte commandLength) {
+  if (inputBuffer[0] == 'A' && commandLength >= 9) {
+    addRawPulse(&inputBuffer[0]);
+  } else if (inputBuffer[0] == 'V' ) {
     Serial.println(FIRMWARE_VERSION);
   } else {
     Serial.println("e");
   }
   Serial.flush();
+}
+
+/**
+ * Add a new pulse to the transmit buffer.
+ * \param in parameter string: "Ammmmssss" where "mmmm" is the mark flank length in us
+ * in HEX format and "ssss" is the following space flank
+ */
+void
+addRawPulse(char *in) {
+  unsigned char pulseByte;
+  word pulseWord;
+
+  // Add the Mark flank
+  fromhex(in+1, &pulseByte, 1);					// Read high byte
+  pulseWord = pulseByte << 8;
+  fromhex(in+3, &pulseByte, 1);					// Read low byte
+  pulseWord += pulseByte;
+  PulseTransmitter.write(pulseWord);
+
+  // Add the Space flank
+  fromhex(in+5, &pulseByte, 1);					// Read high byte
+  pulseWord = pulseByte << 8;
+  fromhex(in+7, &pulseByte, 1);					// Read low byte
+  pulseWord += pulseByte;
+  if (PulseTransmitter.write(pulseWord) == 0) {
+    Serial.print('o');
+    printhex(PulseTransmitter.written());
+    Serial.println("");
+  } else {
+    Serial.println('e');
+  }
 }
 
 void vet(word pulse) {
@@ -96,5 +131,35 @@ static void printhex(word data) {
   Serial.print(hexString[(data >> 8) & 0xF]);
   Serial.print(hexString[(data >> 4) & 0xF]);
   Serial.print(hexString[(data) & 0xF]);
+}
+
+/*
+ * Converts a hex string to a buffer. Not hex characters will be skipped
+ * Returns the hex bytes found. Single-Nibbles wont be converted.
+ */
+int fromhex(const char *in, unsigned char *out, int buflen)
+{
+  unsigned char *op = out, c, h = 0, fnd, step = 0;
+  while((c = *in++)) {
+    fnd = 0;
+    if(c >= '0' && c <= '9') { h |= c-'0';    fnd = 1; }
+    if(c >= 'A' && c <= 'F') { h |= c-'A'+10; fnd = 1; }
+    if(c >= 'a' && c <= 'f') { h |= c-'a'+10; fnd = 1; }
+    if(!fnd) {
+      if(c != ' ')
+        break;
+      continue;
+    }
+    if(step++) {
+      *op++ = h;
+      if(--buflen <= 0)
+        return (op-out);
+      step = 0;
+      h = 0;
+    } else {
+      h <<= 4;
+    }
+  }
+  return op-out;
 }
 
