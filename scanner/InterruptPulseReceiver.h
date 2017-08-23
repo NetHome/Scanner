@@ -26,7 +26,7 @@
 // The receiver class for pulses. This class can only be in one singleton instance
 // "PulseReceiver" since all variables are static for speed in the interrupt routines.
 // The class uses TIMER1 and one input pin supporting interrupts (choosen by the user).
-class Receiver {
+class InterruptPulseReceiver {
   public:
   
     // Start scanning for pulses on the input pin
@@ -62,5 +62,5 @@ class Receiver {
     inline static void timerCompareInterrupt();
 };
 
-extern Receiver PulseReceiver;
+extern InterruptPulseReceiver PulseReceiver;
 

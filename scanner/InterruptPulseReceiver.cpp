@@ -18,26 +18,26 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
  
-#include "receiver.h"
+#include "InterruptPulseReceiver.h"
 
 #define SPACE_INPUT LOW
 #define MARK_INPUT HIGH
 
-word Receiver::scannedPulses[REC_BUFFER_LEN];
-volatile byte Receiver::nextRead = 0;
-volatile byte Receiver::nextWrite = 0;
-volatile byte Receiver::nextWriteCandidate = 0;
-volatile word Receiver::counter = 0;
-volatile byte Receiver::now;
-volatile unsigned long Receiver::space;
-volatile word Receiver::mark;
-volatile byte Receiver::scanState = 0;
-volatile byte Receiver::scanOverflow = 0;
-volatile byte Receiver::rfInputPin = 2;
+word InterruptPulseReceiver::scannedPulses[REC_BUFFER_LEN];
+volatile byte InterruptPulseReceiver::nextRead = 0;
+volatile byte InterruptPulseReceiver::nextWrite = 0;
+volatile byte InterruptPulseReceiver::nextWriteCandidate = 0;
+volatile word InterruptPulseReceiver::counter = 0;
+volatile byte InterruptPulseReceiver::now;
+volatile unsigned long InterruptPulseReceiver::space;
+volatile word InterruptPulseReceiver::mark;
+volatile byte InterruptPulseReceiver::scanState = 0;
+volatile byte InterruptPulseReceiver::scanOverflow = 0;
+volatile byte InterruptPulseReceiver::rfInputPin = 2;
 
-Receiver PulseReceiver;
+InterruptPulseReceiver PulseReceiver;
 
-word Receiver::read(void) {
+word InterruptPulseReceiver::read(void) {
   if (!canRead()) {
     return 0;
   }
@@ -46,11 +46,11 @@ word Receiver::read(void) {
   return result == 0 ? 1 : result;
 }
 
-byte Receiver::canRead() {
+byte InterruptPulseReceiver::canRead() {
   return nextRead != nextWrite;
 }
 
-void Receiver::begin(byte pin) {
+void InterruptPulseReceiver::begin(byte pin) {
   cli();
   rfInputPin = pin;
   TCCR1A = 0;// clear TCCR1A register
@@ -62,18 +62,18 @@ void Receiver::begin(byte pin) {
   TIMSK1 |= (1 << OCIE1A); // enable timer compare interrupt
   sei();
   pinMode(rfInputPin, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(rfInputPin), Receiver::flankDetected, CHANGE);
+  attachInterrupt(digitalPinToInterrupt(rfInputPin), InterruptPulseReceiver::flankDetected, CHANGE);
   space = 0;
   nextRead = 0;
   nextWrite = 0;
   scanState = 0;
 }
 
-void Receiver::end() {
+void InterruptPulseReceiver::end() {
   detachInterrupt(digitalPinToInterrupt(rfInputPin));
 }
 
-inline void Receiver::timerCompareInterrupt() {
+inline void InterruptPulseReceiver::timerCompareInterrupt() {
   scanState = 0; // Assume space state on overflow
   space += 0x7FFF;
   if (space > 0xFFFF) {
@@ -82,13 +82,13 @@ inline void Receiver::timerCompareInterrupt() {
 }
 
 ISR(TIMER1_COMPA_vect){
-  Receiver::timerCompareInterrupt();
+  InterruptPulseReceiver::timerCompareInterrupt();
 }
 
 /**
  * Interrupt service routine for changes on the RF input pin
  */
-void Receiver::flankDetected() {
+void InterruptPulseReceiver::flankDetected() {
   // Save counter and reset
   counter = (TCNT1 >> 1);
   TCNT1 = 0;
