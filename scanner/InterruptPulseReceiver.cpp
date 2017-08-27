@@ -22,6 +22,7 @@
 
 #define SPACE_INPUT LOW
 #define MARK_INPUT HIGH
+#define DEBOUNCE_TIME 20
 
 word InterruptPulseReceiver::scannedPulses[REC_BUFFER_LEN];
 volatile byte InterruptPulseReceiver::nextRead = 0;
@@ -93,6 +94,9 @@ void InterruptPulseReceiver::flankDetected() {
   counter = (TCNT1 >> 1);
   TCNT1 = 0;
   
+  // Wait a while for the input to settle
+  while (TCNT1 < (DEBOUNCE_TIME << 1));
+  
   now = digitalRead(rfInputPin);
   if ((scanState == 0) && (now == MARK_INPUT)) {
     // Handle start of mark
@@ -121,13 +125,7 @@ void InterruptPulseReceiver::flankDetected() {
     space = 0;
     scanState = 0;
   } else {
-    // Handle error?  
-    scannedPulses[nextWrite] = 0;
-    scannedPulses[nextWrite + 1] = 0;
-    nextWrite = (nextWrite + 2) % REC_BUFFER_LEN;
-    if (nextWrite == nextRead) {
-      scanOverflow = 1;
-    }
-    scanState = 0;
+    // Not the expected input state - ignore this pulse flank
+    TCNT1 = TCNT1 + (counter << 1);
   }
 }
