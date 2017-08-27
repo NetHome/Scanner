@@ -22,9 +22,11 @@
  
 #define INPUT_BUFFER_SIZE 20
 #define FIRMWARE_VERSION "VOpenNetHome 1.0"
-
+#define SHORTEST_PULSE 20
 static char inputBuffer[INPUT_BUFFER_SIZE];
 volatile byte state = LOW;
+word lastSpace = 0;
+word lastMark = 0;
 
 void setup() {
   PulseReceiver.begin(2);
@@ -38,18 +40,34 @@ void loop() {
   handleInput();
 }
 
+inline word limitWord(unsigned long data) {
+  return data > 0xFFFF ? 0xFFFF : data;
+}
+
 void handlePulses() {
   static word space;
   static word mark;
   if ((space = PulseReceiver.read()) != 0) {
     mark = PulseReceiver.read();
-    Serial.print("P");
-    printhex(space);
-    printhex(mark);
-    Serial.print("\n");
-    vet(space);
-    vet(mark);
+    // Debounce the pulses.
+    if (lastMark < SHORTEST_PULSE) {
+      lastSpace = limitWord(lastSpace + lastMark + space);
+      lastMark = mark;
+    } else if (space < SHORTEST_PULSE) {
+      lastMark = limitWord(lastMark + space + mark); 
+    } else {
+      printPulse(lastSpace, lastMark);
+      lastSpace = space;
+      lastMark = mark;  
+    }
   }
+}
+
+void printPulse(word space, word mark) {
+  Serial.print("P");
+  printhex(space);
+  printhex(mark);
+  Serial.print("\n");  
 }
 
 void handleInput() {
@@ -99,24 +117,6 @@ addRawPulse(char *in) {
     Serial.println("");
   } else {
     Serial.println('e');
-  }
-}
-
-void vet(word pulse) {
-  static int goodCounter = 0;
-  
-  if ((pulse > 200) && (pulse < 3000)) {
-    goodCounter += 1;
-    if (goodCounter >= 3) {
-      goodCounter = 3;
-      activityLed(HIGH);
-    }
-  } else {
-    goodCounter = 0;
-    if (goodCounter <= 0) {
-      goodCounter = 0;
-      activityLed(LOW);
-    }
   }
 }
 
