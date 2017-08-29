@@ -62,7 +62,6 @@ void InterruptPulseReceiver::begin(byte pin) {
   TCCR1B |= (1 << CS11); // Set CS11 bits for 8 prescaler
   TIMSK1 |= (1 << OCIE1A); // enable timer compare interrupt
   sei();
-  pinMode(rfInputPin, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(rfInputPin), InterruptPulseReceiver::flankDetected, CHANGE);
   space = 0;
   nextRead = 0;

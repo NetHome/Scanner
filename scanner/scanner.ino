@@ -23,16 +23,22 @@
 #define INPUT_BUFFER_SIZE 20
 #define FIRMWARE_VERSION "VOpenNetHome 1.0"
 #define SHORTEST_PULSE 20
+#define RF_INPUT_PIN 2
+#define IR_INPUT_PIN 3
+
+
 static char inputBuffer[INPUT_BUFFER_SIZE];
 volatile byte state = LOW;
 word lastSpace = 0;
 word lastMark = 0;
 
 void setup() {
-  PulseReceiver.begin(2);
+  pinMode(RF_INPUT_PIN, INPUT_PULLUP);
+  pinMode(IR_INPUT_PIN, INPUT_PULLUP);
   PulseTransmitter.reset();
   Serial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);
+  PulseReceiver.begin(RF_INPUT_PIN);
 }
 
 void loop() {
@@ -83,6 +89,14 @@ void interpretCommand(char* inputBuffer, byte commandLength) {
     addRawPulse(&inputBuffer[0]);
   } else if (inputBuffer[0] == 'V' ) {
     Serial.println(FIRMWARE_VERSION);
+  }  else if (inputBuffer[0] == 'R' && commandLength >= 2) {
+    if (inputBuffer[1] == '1') {
+      PulseReceiver.begin(RF_INPUT_PIN);
+    } else if (inputBuffer[1] == '2') {
+      PulseReceiver.begin(IR_INPUT_PIN);
+    } else {
+      PulseReceiver.end();
+    }
   } else {
     Serial.println("e");
   }
