@@ -33,7 +33,7 @@ word lastSpace = 0;
 word lastMark = 0;
 
 void setup() {
-  pinMode(RF_INPUT_PIN, INPUT_PULLUP);
+  pinMode(RF_INPUT_PIN, INPUT);
   pinMode(IR_INPUT_PIN, INPUT);
   PulseTransmitter.reset();
   Serial.begin(115200);

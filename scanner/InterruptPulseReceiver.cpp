@@ -21,7 +21,8 @@
 #include "InterruptPulseReceiver.h"
 
 #define MARK_INPUT HIGH
-#define DEBOUNCE_TIME 20
+#define DEBOUNCE_TIME 5
+#define DEBUG_PIN 13
 
 word InterruptPulseReceiver::scannedPulses[REC_BUFFER_LEN];
 volatile byte InterruptPulseReceiver::nextRead = 0;
@@ -68,6 +69,7 @@ void InterruptPulseReceiver::begin(byte pin, byte markSignalLevel) {
   nextRead = 0;
   nextWrite = 0;
   scanState = 0;
+  pinMode(DEBUG_PIN, OUTPUT);
 }
 
 void InterruptPulseReceiver::end() {
@@ -100,12 +102,14 @@ void InterruptPulseReceiver::flankDetected() {
   now = digitalRead(rfInputPin);
   if ((scanState == 0) && (now == markLevel)) {
     // Handle start of mark
+    digitalWrite(DEBUG_PIN, HIGH);
     space += counter;
     if (space > 0xFFFF) {
       space = 0xFFFF;
     }  
     scanState = 1;
   } else if ((scanState == 1) && (now == !markLevel)) {
+    digitalWrite(DEBUG_PIN, LOW);
     if (scanOverflow && (nextWrite == nextRead)) {
       // If we were in overflow state, but buffer is now drained, clear the state and signal it
       // by writing special values
