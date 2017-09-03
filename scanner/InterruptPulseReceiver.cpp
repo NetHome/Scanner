@@ -20,12 +20,12 @@
  
 #include "InterruptPulseReceiver.h"
 
-#define SPACE_INPUT LOW
 #define MARK_INPUT HIGH
 #define DEBOUNCE_TIME 20
 
 word InterruptPulseReceiver::scannedPulses[REC_BUFFER_LEN];
 volatile byte InterruptPulseReceiver::nextRead = 0;
+volatile byte InterruptPulseReceiver::markLevel = HIGH;
 volatile byte InterruptPulseReceiver::nextWrite = 0;
 volatile byte InterruptPulseReceiver::nextWriteCandidate = 0;
 volatile word InterruptPulseReceiver::counter = 0;
@@ -51,7 +51,7 @@ byte InterruptPulseReceiver::canRead() {
   return nextRead != nextWrite;
 }
 
-void InterruptPulseReceiver::begin(byte pin) {
+void InterruptPulseReceiver::begin(byte pin, byte markSignalLevel) {
   cli();
   rfInputPin = pin;
   TCCR1A = 0;// clear TCCR1A register
@@ -61,6 +61,7 @@ void InterruptPulseReceiver::begin(byte pin) {
   TCCR1B |= (1 << WGM12); // turn on CTC mode
   TCCR1B |= (1 << CS11); // Set CS11 bits for 8 prescaler
   TIMSK1 |= (1 << OCIE1A); // enable timer compare interrupt
+  markLevel = markSignalLevel;
   sei();
   attachInterrupt(digitalPinToInterrupt(rfInputPin), InterruptPulseReceiver::flankDetected, CHANGE);
   space = 0;
@@ -97,14 +98,14 @@ void InterruptPulseReceiver::flankDetected() {
   while (TCNT1 < (DEBOUNCE_TIME << 1));
   
   now = digitalRead(rfInputPin);
-  if ((scanState == 0) && (now == MARK_INPUT)) {
+  if ((scanState == 0) && (now == markLevel)) {
     // Handle start of mark
     space += counter;
     if (space > 0xFFFF) {
       space = 0xFFFF;
     }  
     scanState = 1;
-  } else if ((scanState == 1) && (now == SPACE_INPUT)) {
+  } else if ((scanState == 1) && (now == !markLevel)) {
     if (scanOverflow && (nextWrite == nextRead)) {
       // If we were in overflow state, but buffer is now drained, clear the state and signal it
       // by writing special values

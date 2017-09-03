@@ -23,14 +23,16 @@
 // consists of a space followed by a mark.
 #define REC_BUFFER_LEN 128
 
-// The receiver class for pulses. This class can only be in one singleton instance
-// "PulseReceiver" since all variables are static for speed in the interrupt routines.
-// The class uses TIMER1 and one input pin supporting interrupts (choosen by the user).
+/**
+ * Receiver class for pulses. This class can only be in one singleton instance
+ * "PulseReceiver" since all variables are static for speed in the interrupt routines.
+ * The class uses TIMER1 and one input pin supporting interrupts (choosen by the user).
+ */
 class InterruptPulseReceiver {
   public:
   
     // Start scanning for pulses on the input pin
-    void begin(byte pin);
+    void begin(byte pin, byte markLevel);
     
     // Read the next pulse length in micro seconds. The pulses are allways delivered in pairs, 
     // first a space pulse and then a mark pulse. 
@@ -47,6 +49,7 @@ class InterruptPulseReceiver {
     inline byte canRead();
     
     static word scannedPulses[REC_BUFFER_LEN];
+    static volatile byte markLevel;
     static volatile byte nextRead;
     static volatile byte nextWrite;
     static volatile byte nextWriteCandidate;
